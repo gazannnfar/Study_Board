@@ -6,3 +6,9 @@ dist
 coverage
 *.log
 apps/api/prisma/dev.db
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Nested/legacy project clone (separate git repo, must not be tracked here)
+Study_Board/
