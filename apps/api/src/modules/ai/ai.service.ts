@@ -1,4 +1,6 @@
 import { Priority } from "@prisma/client";
+import { env } from "../../config/env.js";
+import { LlmAiAssistant } from "./ai.llm.js";
 
 export type AiMode = "AI_STRICT" | "AI_LIGHT";
 
@@ -253,4 +255,15 @@ class RuleBasedAiAssistant implements AiAssistantService {
   }
 }
 
-export const aiAssistant: AiAssistantService = new RuleBasedAiAssistant();
+export { RuleBasedAiAssistant };
+
+function createAiAssistant(): AiAssistantService {
+  const ruleBased = new RuleBasedAiAssistant();
+  // Lazy import avoids a require cycle at module-eval time; ai.llm only needs types here.
+  if (env.AI_PROVIDER === "llm" && env.AI_API_KEY) {
+    return new LlmAiAssistant(ruleBased);
+  }
+  return ruleBased;
+}
+
+export const aiAssistant: AiAssistantService = createAiAssistant();
