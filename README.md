@@ -57,6 +57,9 @@ Backend построен модульно: маршруты принимают H
 - `Comment`: обсуждение задачи, опциональная оценка преподавателя
 - `Notification`: уведомления о назначениях, комментариях и дедлайнах
 - `SatisfactionVote`: простая оценка удовлетворенности
+- `ScheduleLesson`: реальные учебные пары, аудитория, преподаватель, тип занятия и тема
+
+Задачи дополнительно поддерживают PERT-поля: `pertOptimisticHours`, `pertMostLikelyHours`, `pertPessimisticHours`, `pertExpectedHours`, а также локальное планирование через `scheduledStart`, `scheduledEnd` и связь с `ScheduleLesson`.
 
 ## Роли
 
@@ -91,6 +94,15 @@ Backend построен модульно: маршруты принимают H
 - `PATCH /notifications/:id/read`
 - `POST /ai/task-suggestions`
 - `POST /ai/deadline-reminder`
+- `POST /ai/pert`
+- `POST /ai/schedule-review`
+- `GET /schedule`
+- `POST /schedule`
+- `POST /schedule/import`
+- `DELETE /schedule/:id`
+- `GET /planning/free-slots`
+- `GET /planning/task-recommendations`
+- `POST /planning/assign-slot`
 
 ## Локальный запуск
 
@@ -178,7 +190,40 @@ Seed создает две учебные группы:
 
 AI слой находится в `apps/api/src/modules/ai/ai.service.ts`.
 
-Сейчас используется `RuleBasedAiAssistant`: он генерирует название, улучшает описание, предлагает приоритет, теги и текст напоминания о дедлайне. Интерфейс `AiAssistantService` можно заменить реальным OpenAI/другим API без изменения frontend-контракта.
+Сейчас используется `RuleBasedAiAssistant`: он генерирует название, улучшает описание, предлагает приоритет, теги, текст напоминания о дедлайне и PERT-оценку. Интерфейс `AiAssistantService` можно заменить реальным OpenAI/другим API без изменения frontend-контракта.
+
+Доступны две логические конфигурации:
+
+- `AI_STRICT`: формальный режим для защиты, планирования и преподавателя. Возвращает PERT-формулу, риски, зависимости, подзадачи и осторожную оценку по свободным слотам.
+- `AI_LIGHT`: быстрый режим для повседневной работы студента. Возвращает короткий практичный ответ, ожидаемое время и ближайшее действие.
+
+PERT рассчитывается по формуле:
+
+```text
+expected = (optimistic + 4 * mostLikely + pessimistic) / 6
+```
+
+## Расписание и локальное планирование
+
+Расписание загружается через `POST /api/schedule/import` в JSON или CSV.
+
+CSV-шаблон:
+
+```csv
+startsAt,endsAt,teacherName,room,lessonType,subject,topic
+2026-06-10T09:00:00.000Z,2026-06-10T10:30:00.000Z,Ирина Сергеевна,304,LECTURE,Проектирование ИС,PERT и планирование
+```
+
+Если расписание есть только на изображении: распознайте его OCR-инструментом или вручную перенесите в CSV/JSON по этому шаблону, затем загрузите через UI-панель "Импорт расписания" или API.
+
+Планировщик использует:
+
+- пары из `ScheduleLesson`;
+- уже запланированные задачи;
+- PERT expected или `estimatedHours`;
+- дедлайны и приоритеты.
+
+Он возвращает свободные окна и рекомендации задач через `/api/planning/free-slots` и `/api/planning/task-recommendations`.
 
 ## Тесты
 
@@ -186,7 +231,18 @@ AI слой находится в `apps/api/src/modules/ai/ai.service.ts`.
 npm test
 ```
 
-Покрыты ключевые RBAC-права и fallback-логика AI-помощника.
+Покрыты ключевые RBAC-права, fallback-логика AI-помощника, PERT-формула и различие strict/light режимов.
+
+Статический анализ (ESLint) и проверка типов (tsc):
+
+```bash
+npm run lint       # ESLint по всему монорепо
+npm run typecheck  # tsc --noEmit для apps/api и apps/web
+```
+
+## Артефакты для чек-листа
+
+Сверка с чек-листом преподавателя находится в `docs/CHECKLIST-MAPPING.md`. В папке `docs` также лежат ТЗ, устав, RACI, риски, user stories, backlog, диаграммы, test report, deployment guide, release notes и план презентации.
 
 ## Деплой
 
