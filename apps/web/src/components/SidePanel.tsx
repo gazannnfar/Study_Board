@@ -1,23 +1,30 @@
 import { useState } from "react";
-import { Bell, Bot, CalendarClock, Gauge, Send, TrendingUp } from "lucide-react";
+import { Bell, Bot, CalendarClock, CalendarDays, Gauge, Send, TrendingUp } from "lucide-react";
 import { statusLabels } from "../constants";
 import { fromDateTimeLocal, formatDateTime } from "../lib/date";
 import { api } from "../lib/api";
 import { useAppStore } from "../store/app-store";
+import type { AiMode } from "../types";
 
 export function SidePanel() {
-  const { analytics, notifications, deadlineAlerts } = useAppStore();
+  const { analytics, notifications, deadlineAlerts, lessons, freeSlots, recommendations, assignRecommendedSlot } = useAppStore();
   const [topic, setTopic] = useState("подготовить защиту проекта");
   const [deadline, setDeadline] = useState("");
+  const [mode, setMode] = useState<AiMode>("AI_LIGHT");
   const [suggestion, setSuggestion] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function handleAiSuggest() {
     setLoading(true);
     try {
-      const response = await api.aiSuggest({ topic, deadline: fromDateTimeLocal(deadline) });
+      const response = await api.aiSuggest({
+        topic,
+        deadline: fromDateTimeLocal(deadline),
+        mode,
+        freeSlotMinutes: freeSlots[0]?.durationMinutes
+      });
       setSuggestion(
-        `${response.suggestion.title}\n${response.suggestion.suggestedPriority} · ${response.suggestion.tags.join(", ")}\n${response.suggestion.deadlineReminder}`
+        `${response.suggestion.title}\n${response.suggestion.suggestedPriority} · PERT ${response.suggestion.pert?.expected ?? "—"} ч\n${response.suggestion.summary}\n${response.suggestion.risks.join("\n")}`
       );
     } finally {
       setLoading(false);
@@ -38,6 +45,8 @@ export function SidePanel() {
           <Kpi label="Закрытие" value={`${analytics?.averageCloseTimeDays ?? 0} дн.`} />
           <Kpi label="Готово" value={`${analytics?.doneTasks ?? 0}/${analytics?.totalTasks ?? 0}`} />
           <Kpi label="Оценка" value={analytics?.satisfaction ? `${analytics.satisfaction}/10` : "—"} />
+          <Kpi label="Пары" value={analytics?.scheduleLoad?.lessons ?? 0} />
+          <Kpi label="PERT" value={`${analytics?.pertSummary?.averageExpectedHours ?? 0} ч`} />
         </div>
       </section>
 
@@ -58,6 +67,53 @@ export function SidePanel() {
               </div>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section className="rounded-md border border-slate-200 bg-white p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <CalendarDays size={18} className="text-emerald-600" aria-hidden />
+          <h2 className="text-sm font-semibold text-slate-800">Расписание и слоты</h2>
+        </div>
+        <div className="space-y-2">
+          {lessons.slice(0, 4).map((lesson) => (
+            <div key={lesson.id} className="rounded-md border border-slate-200 p-2 text-xs">
+              <div className="font-semibold text-slate-800">{lesson.subject}</div>
+              <div className="text-slate-500">
+                {formatDateTime(lesson.startsAt)} · {lesson.room} · {lesson.lessonType}
+              </div>
+            </div>
+          ))}
+          {freeSlots.slice(0, 3).map((slot) => (
+            <div key={`${slot.groupId}-${slot.start}`} className="rounded-md bg-emerald-50 p-2 text-xs text-emerald-800">
+              Окно: {slot.label} · {Math.round(slot.durationMinutes / 60 * 10) / 10} ч
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-md border border-slate-200 bg-white p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <TrendingUp size={18} className="text-indigo-600" aria-hidden />
+          <h2 className="text-sm font-semibold text-slate-800">Рекомендации</h2>
+        </div>
+        <div className="space-y-2">
+          {recommendations.slice(0, 4).map((item) => (
+            <div key={item.task.id} className="rounded-md border border-slate-200 p-2 text-xs">
+              <div className="font-semibold text-slate-800">{item.task.title}</div>
+              <div className="mt-1 text-slate-500">{item.reason}</div>
+              {item.recommendedSlot && (
+                <button
+                  className="mt-2 w-full rounded-md bg-slate-950 px-2 py-1.5 font-medium text-white"
+                  type="button"
+                  onClick={() => void assignRecommendedSlot(item)}
+                >
+                  Поставить в слот
+                </button>
+              )}
+            </div>
+          ))}
+          {recommendations.length === 0 && <p className="text-sm text-slate-500">Пока нет рекомендаций.</p>}
         </div>
       </section>
 
@@ -94,6 +150,26 @@ export function SidePanel() {
           <h2 className="text-sm font-semibold text-slate-800">AI-помощник</h2>
         </div>
         <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              className={`rounded-md border px-3 py-2 text-sm font-medium ${
+                mode === "AI_LIGHT" ? "border-emerald-500 bg-emerald-50 text-emerald-700" : "border-slate-200 text-slate-600"
+              }`}
+              type="button"
+              onClick={() => setMode("AI_LIGHT")}
+            >
+              Лайт
+            </button>
+            <button
+              className={`rounded-md border px-3 py-2 text-sm font-medium ${
+                mode === "AI_STRICT" ? "border-violet-500 bg-violet-50 text-violet-700" : "border-slate-200 text-slate-600"
+              }`}
+              type="button"
+              onClick={() => setMode("AI_STRICT")}
+            >
+              Строгий
+            </button>
+          </div>
           <input
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-emerald-500"
             value={topic}

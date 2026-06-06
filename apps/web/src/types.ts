@@ -1,6 +1,8 @@
 export type Role = "STUDENT" | "STAROSTA" | "TEACHER" | "PROJECT_MANAGER" | "TEAM_LEAD" | "ADMIN";
 export type TaskStatus = "BACKLOG" | "TODO" | "IN_PROGRESS" | "REVIEW" | "DONE";
 export type Priority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
+export type LessonType = "LECTURE" | "PRACTICE" | "LAB" | "SEMINAR" | "CONSULTATION" | "EXAM" | "OTHER";
+export type AiMode = "AI_STRICT" | "AI_LIGHT";
 
 export type User = {
   id: string;
@@ -51,6 +53,13 @@ export type Task = {
   deadline?: string | null;
   tags: string[];
   estimatedHours?: number | null;
+  pertOptimisticHours?: number | null;
+  pertMostLikelyHours?: number | null;
+  pertPessimisticHours?: number | null;
+  pertExpectedHours?: number | null;
+  scheduledStart?: string | null;
+  scheduledEnd?: string | null;
+  scheduleLessonId?: string | null;
   grade?: number | null;
   completedAt?: string | null;
   groupId: string;
@@ -63,7 +72,41 @@ export type Task = {
   creator?: Pick<User, "id" | "name" | "email" | "role" | "avatarColor">;
   group?: Pick<Group, "id" | "name" | "code">;
   project?: Pick<Project, "id" | "name"> | null;
+  scheduleLesson?: Pick<ScheduleLesson, "id" | "subject" | "startsAt" | "endsAt" | "room" | "lessonType"> | null;
   comments?: Comment[];
+};
+
+export type ScheduleLesson = {
+  id: string;
+  groupId: string;
+  dayOfWeek: number;
+  startsAt: string;
+  endsAt: string;
+  teacherName: string;
+  room: string;
+  lessonType: LessonType;
+  subject: string;
+  topic?: string | null;
+  source: string;
+  group?: Pick<Group, "id" | "name" | "code">;
+  tasks?: Array<Pick<Task, "id" | "title" | "status" | "priority">>;
+};
+
+export type FreeSlot = {
+  groupId: string;
+  groupCode: string;
+  start: string;
+  end: string;
+  durationMinutes: number;
+  label: string;
+};
+
+export type TaskRecommendation = {
+  task: Task;
+  requiredMinutes: number;
+  recommendedSlot: FreeSlot | null;
+  fitScore: number;
+  reason: string;
 };
 
 export type Analytics = {
@@ -75,6 +118,15 @@ export type Analytics = {
   averageCloseTimeDays: number;
   satisfaction: number | null;
   statusDistribution: Array<{ status: TaskStatus; count: number; share: number }>;
+  scheduleLoad: {
+    lessons: number;
+    lessonHours: number;
+    plannedTaskHours: number;
+  };
+  pertSummary: {
+    tasksWithPert: number;
+    averageExpectedHours: number;
+  };
   groupSummaries: Array<{ id: string; name: string; code: string; _count: { users: number; tasks: number } }>;
 };
 

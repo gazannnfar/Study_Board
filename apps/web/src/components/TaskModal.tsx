@@ -23,6 +23,12 @@ type FormState = {
   deadline: string;
   tags: string;
   estimatedHours: string;
+  pertOptimisticHours: string;
+  pertMostLikelyHours: string;
+  pertPessimisticHours: string;
+  scheduledStart: string;
+  scheduledEnd: string;
+  scheduleLessonId: string;
   groupId: string;
   projectId: string;
   assigneeId: string;
@@ -37,6 +43,12 @@ const emptyForm: FormState = {
   deadline: "",
   tags: "",
   estimatedHours: "",
+  pertOptimisticHours: "",
+  pertMostLikelyHours: "",
+  pertPessimisticHours: "",
+  scheduledStart: "",
+  scheduledEnd: "",
+  scheduleLessonId: "",
   groupId: "",
   projectId: "",
   assigneeId: "",
@@ -46,6 +58,7 @@ const emptyForm: FormState = {
 export function TaskModal({ open, task, initialStatus, onClose }: Props) {
   const user = useAuthStore((state) => state.user);
   const { groups, users, createTask, updateTask, deleteTask, addComment } = useAppStore();
+  const lessons = useAppStore((state) => state.lessons);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [comment, setComment] = useState("");
   const [commentGrade, setCommentGrade] = useState("");
@@ -56,6 +69,7 @@ export function TaskModal({ open, task, initialStatus, onClose }: Props) {
   const selectedGroup = groups.find((group) => group.id === form.groupId);
   const assigneeOptions = users.filter((item) => !form.groupId || item.groupId === form.groupId || item.role === "TEACHER");
   const projectOptions = selectedGroup?.projects ?? [];
+  const lessonOptions = lessons.filter((lesson) => lesson.groupId === form.groupId);
   const canGrade = user?.role === "TEACHER";
   const defaultGroupId = user?.groupId ?? groups[0]?.id ?? "";
 
@@ -72,6 +86,12 @@ export function TaskModal({ open, task, initialStatus, onClose }: Props) {
         deadline: toDateTimeLocal(task.deadline),
         tags: task.tags.join(", "),
         estimatedHours: task.estimatedHours ? String(task.estimatedHours) : "",
+        pertOptimisticHours: task.pertOptimisticHours ? String(task.pertOptimisticHours) : "",
+        pertMostLikelyHours: task.pertMostLikelyHours ? String(task.pertMostLikelyHours) : "",
+        pertPessimisticHours: task.pertPessimisticHours ? String(task.pertPessimisticHours) : "",
+        scheduledStart: toDateTimeLocal(task.scheduledStart),
+        scheduledEnd: toDateTimeLocal(task.scheduledEnd),
+        scheduleLessonId: task.scheduleLessonId ?? "",
         groupId: task.groupId,
         projectId: task.projectId ?? "",
         assigneeId: task.assigneeId ?? "",
@@ -102,6 +122,12 @@ export function TaskModal({ open, task, initialStatus, onClose }: Props) {
         .map((tag) => tag.trim())
         .filter(Boolean),
       estimatedHours: form.estimatedHours ? Number(form.estimatedHours) : null,
+      pertOptimisticHours: form.pertOptimisticHours ? Number(form.pertOptimisticHours) : null,
+      pertMostLikelyHours: form.pertMostLikelyHours ? Number(form.pertMostLikelyHours) : null,
+      pertPessimisticHours: form.pertPessimisticHours ? Number(form.pertPessimisticHours) : null,
+      scheduledStart: fromDateTimeLocal(form.scheduledStart),
+      scheduledEnd: fromDateTimeLocal(form.scheduledEnd),
+      scheduleLessonId: form.scheduleLessonId || null,
       groupId: form.groupId,
       projectId: form.projectId || null,
       assigneeId: form.assigneeId || null,
@@ -138,16 +164,25 @@ export function TaskModal({ open, task, initialStatus, onClose }: Props) {
         topic: form.title || form.description || "учебная задача",
         description: form.description,
         deadline: fromDateTimeLocal(form.deadline),
-        role: user?.role
+        role: user?.role,
+        mode: "AI_STRICT",
+        pert: {
+          optimistic: form.pertOptimisticHours ? Number(form.pertOptimisticHours) : undefined,
+          mostLikely: form.pertMostLikelyHours ? Number(form.pertMostLikelyHours) : undefined,
+          pessimistic: form.pertPessimisticHours ? Number(form.pertPessimisticHours) : undefined
+        }
       });
       setForm((current) => ({
         ...current,
         title: suggestion.title,
         description: suggestion.improvedDescription,
         priority: suggestion.suggestedPriority,
-        tags: suggestion.tags.join(", ")
+        tags: suggestion.tags.join(", "),
+        pertOptimisticHours: String(suggestion.pert?.optimistic ?? current.pertOptimisticHours),
+        pertMostLikelyHours: String(suggestion.pert?.mostLikely ?? current.pertMostLikelyHours),
+        pertPessimisticHours: String(suggestion.pert?.pessimistic ?? current.pertPessimisticHours)
       }));
-      setAiReminder(suggestion.deadlineReminder);
+      setAiReminder(`${suggestion.summary}\n${suggestion.deadlineReminder}`);
     } catch (aiError) {
       setError(aiError instanceof Error ? aiError.message : "AI-помощник недоступен");
     } finally {
@@ -326,6 +361,81 @@ export function TaskModal({ open, task, initialStatus, onClose }: Props) {
                   disabled={!canGrade}
                 />
               </label>
+            </div>
+
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <h3 className="mb-3 text-sm font-semibold text-slate-800">PERT и локальное планирование</h3>
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-slate-600">Optimistic, ч</span>
+                  <input
+                    className="w-full rounded-md border border-slate-300 px-3 py-2"
+                    value={form.pertOptimisticHours}
+                    onChange={(event) => setForm({ ...form, pertOptimisticHours: event.target.value })}
+                    min={0.5}
+                    step={0.5}
+                    type="number"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-slate-600">Most likely, ч</span>
+                  <input
+                    className="w-full rounded-md border border-slate-300 px-3 py-2"
+                    value={form.pertMostLikelyHours}
+                    onChange={(event) => setForm({ ...form, pertMostLikelyHours: event.target.value })}
+                    min={0.5}
+                    step={0.5}
+                    type="number"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-slate-600">Pessimistic, ч</span>
+                  <input
+                    className="w-full rounded-md border border-slate-300 px-3 py-2"
+                    value={form.pertPessimisticHours}
+                    onChange={(event) => setForm({ ...form, pertPessimisticHours: event.target.value })}
+                    min={0.5}
+                    step={0.5}
+                    type="number"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-slate-600">Начать</span>
+                  <input
+                    className="w-full rounded-md border border-slate-300 px-3 py-2"
+                    value={form.scheduledStart}
+                    onChange={(event) => setForm({ ...form, scheduledStart: event.target.value })}
+                    type="datetime-local"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-slate-600">Закончить</span>
+                  <input
+                    className="w-full rounded-md border border-slate-300 px-3 py-2"
+                    value={form.scheduledEnd}
+                    onChange={(event) => setForm({ ...form, scheduledEnd: event.target.value })}
+                    type="datetime-local"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-slate-600">Привязка к паре</span>
+                  <select
+                    className="w-full rounded-md border border-slate-300 px-3 py-2"
+                    value={form.scheduleLessonId}
+                    onChange={(event) => setForm({ ...form, scheduleLessonId: event.target.value })}
+                  >
+                    <option value="">Без пары</option>
+                    {lessonOptions.map((lesson) => (
+                      <option key={lesson.id} value={lesson.id}>
+                        {lesson.subject} · {formatDateTime(lesson.startsAt)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {task?.pertExpectedHours && (
+                <p className="mt-2 text-xs text-slate-500">Expected PERT: {task.pertExpectedHours} ч</p>
+              )}
             </div>
 
             {aiReminder && <p className="rounded-md bg-violet-50 px-3 py-2 text-sm text-violet-800">{aiReminder}</p>}

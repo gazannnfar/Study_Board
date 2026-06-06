@@ -1,6 +1,18 @@
 import { create } from "zustand";
 import { api, type TaskPayload } from "../lib/api";
-import type { Analytics, DeadlineAlert, Group, NotificationItem, Priority, Task, TaskStatus, User } from "../types";
+import type {
+  Analytics,
+  DeadlineAlert,
+  FreeSlot,
+  Group,
+  NotificationItem,
+  Priority,
+  ScheduleLesson,
+  Task,
+  TaskRecommendation,
+  TaskStatus,
+  User
+} from "../types";
 
 type Filters = {
   assigneeId?: string;
@@ -18,6 +30,9 @@ type AppState = {
   analytics: Analytics | null;
   notifications: NotificationItem[];
   deadlineAlerts: DeadlineAlert[];
+  lessons: ScheduleLesson[];
+  freeSlots: FreeSlot[];
+  recommendations: TaskRecommendation[];
   filters: Filters;
   loading: boolean;
   error: string | null;
@@ -29,6 +44,8 @@ type AppState = {
   deleteTask: (id: string) => Promise<void>;
   addComment: (taskId: string, payload: { body: string; grade?: number | null }) => Promise<void>;
   updateUser: (id: string, payload: Partial<User>) => Promise<void>;
+  importScheduleCsv: (groupId: string, csv: string) => Promise<number>;
+  assignRecommendedSlot: (recommendation: TaskRecommendation) => Promise<void>;
 };
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -38,6 +55,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   analytics: null,
   notifications: [],
   deadlineAlerts: [],
+  lessons: [],
+  freeSlots: [],
+  recommendations: [],
   filters: {},
   loading: false,
   error: null,
@@ -51,12 +71,24 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const filters = get().filters;
-      const [{ groups }, { users }, { tasks }, { analytics }, notificationPayload] = await Promise.all([
+      const [
+        { groups },
+        { users },
+        { tasks },
+        { analytics },
+        notificationPayload,
+        { lessons },
+        { slots },
+        { recommendations }
+      ] = await Promise.all([
         api.groups(),
         api.users(),
         api.tasks(filters),
         api.analytics(filters.groupId),
-        api.notifications()
+        api.notifications(),
+        api.schedule({ groupId: filters.groupId }),
+        api.freeSlots({ groupId: filters.groupId, minSlotMinutes: 60 }),
+        api.taskRecommendations({ groupId: filters.groupId, limit: 8 })
       ]);
       set({
         groups,
@@ -65,6 +97,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         analytics,
         notifications: notificationPayload.notifications,
         deadlineAlerts: notificationPayload.deadlineAlerts,
+        lessons,
+        freeSlots: slots,
+        recommendations,
         loading: false
       });
     } catch (error) {
@@ -95,5 +130,21 @@ export const useAppStore = create<AppState>((set, get) => ({
   async updateUser(id, payload) {
     const { user } = await api.updateUser(id, payload);
     set({ users: get().users.map((item) => (item.id === id ? user : item)) });
+  },
+  async importScheduleCsv(groupId, csv) {
+    const result = await api.importSchedule({ format: "csv", groupId, csv, source: "ui-csv-import" });
+    set({ lessons: [...get().lessons, ...result.lessons] });
+    void get().loadDashboard();
+    return result.imported;
+  },
+  async assignRecommendedSlot(recommendation) {
+    if (!recommendation.recommendedSlot) return;
+    const { task } = await api.assignSlot({
+      taskId: recommendation.task.id,
+      scheduledStart: recommendation.recommendedSlot.start,
+      scheduledEnd: recommendation.recommendedSlot.end
+    });
+    set({ tasks: get().tasks.map((item) => (item.id === task.id ? task : item)) });
+    void get().loadDashboard();
   }
 }));

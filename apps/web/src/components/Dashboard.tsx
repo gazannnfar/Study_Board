@@ -8,6 +8,7 @@ import { AdminPanel } from "./AdminPanel";
 import { Avatar } from "./Avatar";
 import { FiltersBar } from "./FiltersBar";
 import { KanbanBoard } from "./KanbanBoard";
+import { ScheduleImportPanel } from "./ScheduleImportPanel";
 import { SidePanel } from "./SidePanel";
 import { TaskModal } from "./TaskModal";
 
@@ -99,6 +100,7 @@ export function Dashboard() {
         </div>
 
         <FiltersBar />
+        <ScheduleImportPanel />
 
         <div className="grid gap-4 xl:grid-cols-[1fr_340px]">
           <section className="min-w-0">

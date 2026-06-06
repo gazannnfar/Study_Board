@@ -2,10 +2,14 @@ import type {
   Analytics,
   Comment,
   DeadlineAlert,
+  FreeSlot,
+  LessonType,
   Group,
   NotificationItem,
   Priority,
+  ScheduleLesson,
   Task,
+  TaskRecommendation,
   TaskStatus,
   User
 } from "../types";
@@ -45,6 +49,12 @@ export type TaskPayload = {
   deadline?: string | null;
   tags?: string[];
   estimatedHours?: number | null;
+  pertOptimisticHours?: number | null;
+  pertMostLikelyHours?: number | null;
+  pertPessimisticHours?: number | null;
+  scheduledStart?: string | null;
+  scheduledEnd?: string | null;
+  scheduleLessonId?: string | null;
   groupId?: string;
   projectId?: string | null;
   assigneeId?: string | null;
@@ -82,14 +92,74 @@ export const api = {
     request<{ analytics: Analytics }>(`/analytics/overview${groupId ? `?groupId=${groupId}` : ""}`),
   notifications: () =>
     request<{ notifications: NotificationItem[]; deadlineAlerts: DeadlineAlert[] }>("/notifications"),
-  aiSuggest: (payload: { topic: string; description?: string; deadline?: string | null; role?: string }) =>
+  schedule: (query: Record<string, string | undefined> = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+    return request<{ lessons: ScheduleLesson[] }>(`/schedule?${params.toString()}`);
+  },
+  importSchedule: (payload: {
+    format: "json" | "csv";
+    source?: string;
+    groupId?: string;
+    lessons?: Array<{
+      groupId: string;
+      startsAt: string;
+      endsAt: string;
+      teacherName: string;
+      room: string;
+      lessonType?: LessonType;
+      subject: string;
+      topic?: string | null;
+    }>;
+    csv?: string;
+  }) => request<{ imported: number; lessons: ScheduleLesson[] }>("/schedule/import", { method: "POST", body: JSON.stringify(payload) }),
+  freeSlots: (query: Record<string, string | number | undefined> = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined && value !== "") params.set(key, String(value));
+    });
+    return request<{ slots: FreeSlot[] }>(`/planning/free-slots?${params.toString()}`);
+  },
+  taskRecommendations: (query: Record<string, string | number | undefined> = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined && value !== "") params.set(key, String(value));
+    });
+    return request<{ recommendations: TaskRecommendation[] }>(`/planning/task-recommendations?${params.toString()}`);
+  },
+  assignSlot: (payload: { taskId: string; scheduledStart: string; scheduledEnd: string; scheduleLessonId?: string | null }) =>
+    request<{ task: Task }>("/planning/assign-slot", { method: "POST", body: JSON.stringify(payload) }),
+  aiSuggest: (payload: {
+    topic: string;
+    description?: string;
+    deadline?: string | null;
+    role?: string;
+    mode?: "AI_STRICT" | "AI_LIGHT";
+    pert?: { optimistic?: number; mostLikely?: number; pessimistic?: number };
+    freeSlotMinutes?: number;
+  }) =>
     request<{
       suggestion: {
+        mode: "AI_STRICT" | "AI_LIGHT";
         title: string;
         improvedDescription: string;
         suggestedPriority: Priority;
         tags: string[];
         deadlineReminder: string;
+        summary: string;
+        risks: string[];
+        dependencies: string[];
+        subtasks: string[];
+        pert: {
+          optimistic: number;
+          mostLikely: number;
+          pessimistic: number;
+          expected: number;
+          spread: number;
+          confidence: "HIGH" | "MEDIUM" | "LOW";
+        } | null;
       };
     }>("/ai/task-suggestions", { method: "POST", body: JSON.stringify(payload) })
 };
