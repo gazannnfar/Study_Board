@@ -13,11 +13,23 @@ const userSummary = {
   avatarColor: true
 } satisfies Prisma.UserSelect;
 
+export function calculatePertExpected(
+  optimistic?: number | null,
+  mostLikely?: number | null,
+  pessimistic?: number | null
+) {
+  if (optimistic === undefined || optimistic === null) return null;
+  if (mostLikely === undefined || mostLikely === null) return null;
+  if (pessimistic === undefined || pessimistic === null) return null;
+  return Number(((optimistic + 4 * mostLikely + pessimistic) / 6).toFixed(2));
+}
+
 export const taskInclude = {
   assignee: { select: userSummary },
   creator: { select: userSummary },
   group: { select: { id: true, name: true, code: true } },
   project: { select: { id: true, name: true } },
+  scheduleLesson: { select: { id: true, subject: true, startsAt: true, endsAt: true, room: true, lessonType: true } },
   comments: {
     include: { author: { select: userSummary } },
     orderBy: { createdAt: "desc" as const },
@@ -129,6 +141,18 @@ async function assertGroupIsVisible(user: AuthUser, groupId: string) {
   }
 }
 
+async function assertScheduleLessonForGroup(scheduleLessonId: string | null | undefined, groupId: string) {
+  if (!scheduleLessonId) return;
+  const lesson = await prisma.scheduleLesson.findFirst({
+    where: { id: scheduleLessonId, groupId },
+    select: { id: true }
+  });
+
+  if (!lesson) {
+    throw new AppError(400, "Schedule lesson does not belong to task group", "SCHEDULE_GROUP_MISMATCH");
+  }
+}
+
 export async function createTask(user: AuthUser, input: CreateTaskInput) {
   const groupId = input.groupId ?? user.groupId;
   if (!groupId) {
@@ -140,6 +164,12 @@ export async function createTask(user: AuthUser, input: CreateTaskInput) {
   }
 
   await assertGroupIsVisible(user, groupId);
+  await assertScheduleLessonForGroup(input.scheduleLessonId, groupId);
+  const pertExpectedHours = calculatePertExpected(
+    input.pertOptimisticHours,
+    input.pertMostLikelyHours,
+    input.pertPessimisticHours
+  );
 
   const task = await prisma.task.create({
     data: {
@@ -150,6 +180,13 @@ export async function createTask(user: AuthUser, input: CreateTaskInput) {
       deadline: input.deadline ? new Date(input.deadline) : null,
       tags: input.tags,
       estimatedHours: input.estimatedHours ?? null,
+      pertOptimisticHours: input.pertOptimisticHours ?? null,
+      pertMostLikelyHours: input.pertMostLikelyHours ?? null,
+      pertPessimisticHours: input.pertPessimisticHours ?? null,
+      pertExpectedHours,
+      scheduledStart: input.scheduledStart ? new Date(input.scheduledStart) : null,
+      scheduledEnd: input.scheduledEnd ? new Date(input.scheduledEnd) : null,
+      scheduleLessonId: input.scheduleLessonId ?? null,
       groupId,
       projectId: input.projectId ?? null,
       assigneeId: input.assigneeId ?? (user.role === Role.STUDENT ? user.id : null),
@@ -202,6 +239,14 @@ export async function updateTask(user: AuthUser, id: string, input: UpdateTaskIn
     await assertGroupIsVisible(user, input.groupId);
   }
 
+  await assertScheduleLessonForGroup(input.scheduleLessonId, input.groupId ?? existing.groupId);
+
+  const pertExpectedHours = calculatePertExpected(
+    input.pertOptimisticHours ?? existing.pertOptimisticHours,
+    input.pertMostLikelyHours ?? existing.pertMostLikelyHours,
+    input.pertPessimisticHours ?? existing.pertPessimisticHours
+  );
+
   const nextStatus = input.status ?? existing.status;
   const completedAt =
     nextStatus === TaskStatus.DONE && existing.status !== TaskStatus.DONE
@@ -220,6 +265,14 @@ export async function updateTask(user: AuthUser, id: string, input: UpdateTaskIn
       deadline: input.deadline === undefined ? undefined : input.deadline ? new Date(input.deadline) : null,
       tags: input.tags,
       estimatedHours: input.estimatedHours === undefined ? undefined : input.estimatedHours,
+      pertOptimisticHours: input.pertOptimisticHours === undefined ? undefined : input.pertOptimisticHours,
+      pertMostLikelyHours: input.pertMostLikelyHours === undefined ? undefined : input.pertMostLikelyHours,
+      pertPessimisticHours: input.pertPessimisticHours === undefined ? undefined : input.pertPessimisticHours,
+      pertExpectedHours,
+      scheduledStart:
+        input.scheduledStart === undefined ? undefined : input.scheduledStart ? new Date(input.scheduledStart) : null,
+      scheduledEnd: input.scheduledEnd === undefined ? undefined : input.scheduledEnd ? new Date(input.scheduledEnd) : null,
+      scheduleLessonId: input.scheduleLessonId === undefined ? undefined : input.scheduleLessonId,
       groupId: input.groupId,
       projectId: input.projectId === undefined ? undefined : input.projectId,
       assigneeId: input.assigneeId === undefined ? undefined : input.assigneeId,

@@ -11,11 +11,37 @@ describe("AI assistant fallback", () => {
 
     expect(suggestion.suggestedPriority).toBe(Priority.URGENT);
     expect(suggestion.tags).toContain("presentation");
-    expect(suggestion.improvedDescription).toContain("Критерии готовности");
+    expect(suggestion.improvedDescription).toContain("Готово");
   });
 
   it("builds a useful reminder for missing deadline", async () => {
     const reminder = await aiAssistant.buildDeadlineReminder({ title: "README" });
     expect(reminder).toContain("дедлайн");
+  });
+
+  it("calculates PERT expected value", () => {
+    const result = aiAssistant.estimatePert({ optimistic: 2, mostLikely: 5, pessimistic: 14 });
+    expect(result.expected).toBe(6);
+    expect(result.confidence).toBe("LOW");
+  });
+
+  it("returns different depth for strict and light modes", async () => {
+    const strict = await aiAssistant.suggestTask({
+      topic: "подготовить защиту проекта",
+      mode: "AI_STRICT",
+      pert: { optimistic: 2, mostLikely: 4, pessimistic: 10 },
+      freeSlotMinutes: 60
+    });
+    const light = await aiAssistant.suggestTask({
+      topic: "подготовить защиту проекта",
+      mode: "AI_LIGHT",
+      pert: { optimistic: 2, mostLikely: 4, pessimistic: 10 },
+      freeSlotMinutes: 60
+    });
+
+    expect(strict.mode).toBe("AI_STRICT");
+    expect(light.mode).toBe("AI_LIGHT");
+    expect(strict.subtasks.length).toBeGreaterThan(light.subtasks.length);
+    expect(strict.summary.length).toBeGreaterThan(light.summary.length);
   });
 });

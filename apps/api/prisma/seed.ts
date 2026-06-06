@@ -1,4 +1,4 @@
-import { PrismaClient, Priority, Role, TaskStatus } from "@prisma/client";
+import { LessonType, PrismaClient, Priority, Role, TaskStatus } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
@@ -8,6 +8,12 @@ function daysFromNow(days: number) {
   const date = new Date();
   date.setDate(date.getDate() + days);
   date.setHours(12, 0, 0, 0);
+  return date;
+}
+
+function dateAt(days: number, hour: number, minute = 0) {
+  const date = daysFromNow(days);
+  date.setHours(hour, minute, 0, 0);
   return date;
 }
 
@@ -21,6 +27,7 @@ async function main() {
   await prisma.comment.deleteMany();
   await prisma.satisfactionVote.deleteMany();
   await prisma.task.deleteMany();
+  await prisma.scheduleLesson.deleteMany();
   await prisma.project.deleteMany();
   await prisma.group.deleteMany();
   await prisma.user.deleteMany();
@@ -169,6 +176,107 @@ async function main() {
     }
   });
 
+  const lessons = await Promise.all([
+    prisma.scheduleLesson.create({
+      data: {
+        groupId: webGroup.id,
+        dayOfWeek: 1,
+        startsAt: dateAt(2, 9, 0),
+        endsAt: dateAt(2, 10, 30),
+        teacherName: "Ирина Сергеевна",
+        room: "304",
+        lessonType: LessonType.LECTURE,
+        subject: "Проектирование информационных систем",
+        topic: "REST API, роли и границы ответственности",
+        source: "seed-realistic"
+      }
+    }),
+    prisma.scheduleLesson.create({
+      data: {
+        groupId: webGroup.id,
+        dayOfWeek: 1,
+        startsAt: dateAt(2, 10, 45),
+        endsAt: dateAt(2, 12, 15),
+        teacherName: "Ирина Сергеевна",
+        room: "Лаб. 2",
+        lessonType: LessonType.LAB,
+        subject: "Web-разработка",
+        topic: "React SPA и демонстрационные сценарии",
+        source: "seed-realistic"
+      }
+    }),
+    prisma.scheduleLesson.create({
+      data: {
+        groupId: webGroup.id,
+        dayOfWeek: 3,
+        startsAt: dateAt(4, 13, 0),
+        endsAt: dateAt(4, 14, 30),
+        teacherName: "Павел Андреевич",
+        room: "212",
+        lessonType: LessonType.PRACTICE,
+        subject: "Управление проектами",
+        topic: "PERT, риски и планирование спринта",
+        source: "seed-realistic"
+      }
+    }),
+    prisma.scheduleLesson.create({
+      data: {
+        groupId: webGroup.id,
+        dayOfWeek: 5,
+        startsAt: dateAt(6, 11, 0),
+        endsAt: dateAt(6, 12, 30),
+        teacherName: "Ирина Сергеевна",
+        room: "Коворкинг",
+        lessonType: LessonType.CONSULTATION,
+        subject: "Консультация по защите",
+        topic: "Проверка MVP и сценария демо",
+        source: "seed-realistic"
+      }
+    }),
+    prisma.scheduleLesson.create({
+      data: {
+        groupId: dataGroup.id,
+        dayOfWeek: 2,
+        startsAt: dateAt(3, 9, 0),
+        endsAt: dateAt(3, 10, 30),
+        teacherName: "Ирина Сергеевна",
+        room: "118",
+        lessonType: LessonType.LECTURE,
+        subject: "Аналитика данных",
+        topic: "Метрики учебной активности",
+        source: "seed-realistic"
+      }
+    }),
+    prisma.scheduleLesson.create({
+      data: {
+        groupId: dataGroup.id,
+        dayOfWeek: 2,
+        startsAt: dateAt(3, 10, 45),
+        endsAt: dateAt(3, 12, 15),
+        teacherName: "Сергей Викторович",
+        room: "Лаб. 4",
+        lessonType: LessonType.LAB,
+        subject: "Визуализация данных",
+        topic: "Dashboard и интерпретация KPI",
+        source: "seed-realistic"
+      }
+    }),
+    prisma.scheduleLesson.create({
+      data: {
+        groupId: dataGroup.id,
+        dayOfWeek: 4,
+        startsAt: dateAt(5, 15, 0),
+        endsAt: dateAt(5, 16, 30),
+        teacherName: "Ирина Сергеевна",
+        room: "205",
+        lessonType: LessonType.SEMINAR,
+        subject: "Исследовательский семинар",
+        topic: "Выводы и защита результатов",
+        source: "seed-realistic"
+      }
+    })
+  ]);
+
   const tasks = await Promise.all([
     prisma.task.create({
       data: {
@@ -180,6 +288,10 @@ async function main() {
         completedAt: daysFromNow(-7),
         tags: ["backend", "rbac"],
         estimatedHours: 8,
+        pertOptimisticHours: 5,
+        pertMostLikelyHours: 8,
+        pertPessimisticHours: 12,
+        pertExpectedHours: 8.17,
         grade: 92,
         groupId: webGroup.id,
         projectId: webProject.id,
@@ -196,6 +308,12 @@ async function main() {
         deadline: daysFromNow(3),
         tags: ["frontend", "kanban"],
         estimatedHours: 12,
+        pertOptimisticHours: 8,
+        pertMostLikelyHours: 12,
+        pertPessimisticHours: 18,
+        pertExpectedHours: 12.33,
+        scheduledStart: dateAt(2, 14, 0),
+        scheduledEnd: dateAt(2, 16, 0),
         groupId: webGroup.id,
         projectId: webProject.id,
         creatorId: lead.id,
@@ -211,6 +329,11 @@ async function main() {
         deadline: daysFromNow(1),
         tags: ["presentation", "demo"],
         estimatedHours: 5,
+        pertOptimisticHours: 3,
+        pertMostLikelyHours: 5,
+        pertPessimisticHours: 8,
+        pertExpectedHours: 5.17,
+        scheduleLessonId: lessons[3].id,
         groupId: webGroup.id,
         projectId: webProject.id,
         creatorId: teacher.id,
@@ -226,6 +349,10 @@ async function main() {
         deadline: daysFromNow(5),
         tags: ["docs"],
         estimatedHours: 4,
+        pertOptimisticHours: 2,
+        pertMostLikelyHours: 4,
+        pertPessimisticHours: 7,
+        pertExpectedHours: 4.17,
         groupId: webGroup.id,
         projectId: webProject.id,
         creatorId: starosta.id,
@@ -241,6 +368,10 @@ async function main() {
         deadline: daysFromNow(8),
         tags: ["qa", "frontend"],
         estimatedHours: 3,
+        pertOptimisticHours: 1.5,
+        pertMostLikelyHours: 3,
+        pertPessimisticHours: 5,
+        pertExpectedHours: 3.08,
         groupId: webGroup.id,
         projectId: webProject.id,
         creatorId: student.id,
@@ -257,6 +388,10 @@ async function main() {
         completedAt: daysFromNow(-3),
         tags: ["analytics", "dataset"],
         estimatedHours: 6,
+        pertOptimisticHours: 4,
+        pertMostLikelyHours: 6,
+        pertPessimisticHours: 10,
+        pertExpectedHours: 6.33,
         groupId: dataGroup.id,
         projectId: dataProject.id,
         creatorId: teacher.id,
@@ -272,6 +407,12 @@ async function main() {
         deadline: daysFromNow(-1),
         tags: ["analytics", "dashboard"],
         estimatedHours: 10,
+        pertOptimisticHours: 7,
+        pertMostLikelyHours: 10,
+        pertPessimisticHours: 16,
+        pertExpectedHours: 10.5,
+        scheduledStart: dateAt(3, 13, 0),
+        scheduledEnd: dateAt(3, 15, 0),
         groupId: dataGroup.id,
         projectId: dataProject.id,
         creatorId: dataStarosta.id,
@@ -287,6 +428,10 @@ async function main() {
         deadline: daysFromNow(9),
         tags: ["presentation", "research"],
         estimatedHours: 4,
+        pertOptimisticHours: 2,
+        pertMostLikelyHours: 4,
+        pertPessimisticHours: 8,
+        pertExpectedHours: 4.33,
         groupId: dataGroup.id,
         projectId: dataProject.id,
         creatorId: dataStudent.id,

@@ -31,6 +31,16 @@ enum Priority {
   URGENT
 }
 
+enum LessonType {
+  LECTURE
+  PRACTICE
+  LAB
+  SEMINAR
+  CONSULTATION
+  EXAM
+  OTHER
+}
+
 model Group {
   id          String    @id @default(cuid())
   name        String
@@ -41,6 +51,7 @@ model Group {
   users       User[]    @relation("UserGroup")
   projects    Project[]
   tasks       Task[]
+  lessons     ScheduleLesson[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 }
@@ -94,10 +105,18 @@ model Task {
   estimatedHours Int?
   grade          Int?
   completedAt    DateTime?
+  pertOptimisticHours  Float?
+  pertMostLikelyHours  Float?
+  pertPessimisticHours Float?
+  pertExpectedHours    Float?
+  scheduledStart DateTime?
+  scheduledEnd   DateTime?
   groupId        String
   group          Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
   projectId      String?
   project        Project?     @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  scheduleLessonId String?
+  scheduleLesson   ScheduleLesson? @relation(fields: [scheduleLessonId], references: [id], onDelete: SetNull)
   creatorId      String
   creator        User         @relation("CreatedTasks", fields: [creatorId], references: [id], onDelete: Restrict)
   assigneeId     String?
@@ -106,6 +125,27 @@ model Task {
   notifications  Notification[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+}
+
+model ScheduleLesson {
+  id          String     @id @default(cuid())
+  groupId     String
+  group       Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  dayOfWeek   Int
+  startsAt    DateTime
+  endsAt      DateTime
+  teacherName String
+  room        String
+  lessonType  LessonType @default(PRACTICE)
+  subject     String
+  topic       String?
+  source      String     @default("seed")
+  tasks       Task[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([groupId, startsAt])
+  @@index([dayOfWeek])
 }
 
 model Comment {

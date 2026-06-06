@@ -3,7 +3,7 @@ import { authenticate } from "../../middleware/auth.js";
 import { asyncHandler } from "../../middleware/error.js";
 import { validateBody } from "../../middleware/validate.js";
 import { aiAssistant } from "./ai.service.js";
-import { deadlineReminderSchema, taskSuggestionSchema } from "./ai.schemas.js";
+import { deadlineReminderSchema, pertSchema, scheduleReviewSchema, taskSuggestionSchema } from "./ai.schemas.js";
 
 const router = Router();
 
@@ -24,6 +24,24 @@ router.post(
   asyncHandler(async (req, res) => {
     const reminder = await aiAssistant.buildDeadlineReminder(req.body);
     res.json({ reminder });
+  })
+);
+
+router.post(
+  "/pert",
+  validateBody(pertSchema),
+  asyncHandler(async (req, res) => {
+    const pert = aiAssistant.estimatePert(req.body);
+    res.json({ pert });
+  })
+);
+
+router.post(
+  "/schedule-review",
+  validateBody(scheduleReviewSchema),
+  asyncHandler(async (req, res) => {
+    const review = await aiAssistant.reviewScheduleContext(req.body);
+    res.json({ review });
   })
 );
 
