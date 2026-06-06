@@ -1,0 +1,68 @@
+@startuml
+title Диаграмма последовательности: работа с задачей в StudyBoard
+actor "Староста" as Headman
+actor "Студент" as Student
+actor "Преподаватель" as Teacher
+participant "Frontend\nReact/TypeScript" as FE
+participant "Backend API\nNode.js/Express" as BE
+participant "Аутентификация\nJWT + RBAC" as Auth
+participant "Валидатор\nсхемы запроса" as Val
+participant "Сервис\nуведомлений" as Notif
+database "PostgreSQL" as DB
+autonumber
+
+== Сценарий 1. Создание и назначение задачи старостой ==
+Headman -> FE: Заполнить форму задачи\n(название, исполнитель, срок)
+FE -> BE: POST /api/tasks\nAuthorization: Bearer JWT
+BE -> Auth: Проверить токен и роль
+alt Нет прав (роль не STAROSTA)
+  Auth --> BE: Доступ запрещён
+  BE --> FE: 403 Forbidden
+  FE --> Headman: Показать ошибку доступа
+else Доступ разрешён
+  Auth --> BE: user{id, role}
+  BE -> Val: Проверить поля\n(title, deadline, assigneeId)
+  alt Данные некорректны
+    Val --> BE: Ошибка валидации
+    BE --> FE: 422 Validation Error
+    FE --> Headman: Подсветить ошибки формы
+  else Данные корректны
+    Val --> BE: Payload валиден
+    BE -> DB: INSERT Task\n(status, assigneeId, deadline)
+    DB --> BE: task_id
+    opt Указан дедлайн
+      BE -> Notif: Запланировать напоминание
+      Notif --> BE: Напоминание поставлено
+    end
+    BE --> FE: 201 Created (task)
+    FE --> Headman: Карточка появилась\nв колонке «К выполнению»
+  end
+end
+
+== Сценарий 2. Перемещение задачи студентом ==
+Student -> FE: Перетащить карточку\nв колонку «В работе»
+FE -> BE: PATCH /api/tasks/:id\nAuthorization: Bearer JWT
+BE -> Auth: Проверить токен и права\n(исполнитель или STAROSTA/TEAM_LEAD)
+Auth --> BE: Доступ разрешён
+BE -> DB: UPDATE Task\n(status, position)
+DB --> BE: Обновлено
+BE --> FE: 200 OK (task, overdue)
+FE --> Student: Карточка перемещена,\nстатус обновлён
+
+== Сценарий 3. Напоминание о приближающемся дедлайне ==
+Notif -> DB: Найти задачи\nс близким сроком
+DB --> Notif: Список задач
+Notif -> DB: INSERT Notification
+DB --> Notif: Сохранено
+Notif --> Student: Уведомление\nо дедлайне задачи
+
+== Сценарий 4. Просмотр отчёта преподавателем ==
+Teacher -> FE: Открыть отчёт по группе
+FE -> BE: GET /api/analytics/overview\nAuthorization: Bearer JWT
+BE -> Auth: Проверить роль (teacher)
+Auth --> BE: Доступ разрешён
+BE -> DB: Агрегировать задачи группы
+DB --> BE: Метрики:\nвовремя, просрочено, в работе
+BE --> FE: Отчёт о прогрессе
+FE --> Teacher: Показать прогресс группы\nи проблемные задачи
+@enduml
